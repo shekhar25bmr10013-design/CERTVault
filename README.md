@@ -58,26 +58,25 @@
 
 ---
 ## 📁 Project Structure
-certvault-blockchain/
-│
-├── frontend/
-│ ├── index.html # Upload certificate page
-│ ├── admin.html # Admin panel
-│ ├── blockchain.html # Blockchain explorer
-│ ├── verify.html # QR verification page
-│ └── style.css # Common styles
-│
-├── backend/
-│ ├── server.js # Main server
-│ ├── package.json # Dependencies
-│ └── data/
-│ ├── certificates.json
-│ └── blockchain.json
-│
-├── .gitignore
-├── README.md
-└── LICENSE
 
+**certvault-blockchain/**  
+- **frontend/**  
+  - `index.html` – Upload certificate page  
+  - `admin.html` – Admin panel  
+  - `blockchain.html` – Blockchain explorer  
+  - `verify.html` – QR verification page  
+  - `style.css` – Common styles  
+
+- **backend/**  
+  - `server.js` – Main server  
+  - `package.json` – Dependencies  
+  - **data/**  
+    - `certificates.json` – Stored certificates data  
+    - `blockchain.json` – Blockchain records  
+
+- `.gitignore` – Git ignore file  
+- `README.md` – Project documentation  
+- `LICENSE` – License file
 
 ---
 
