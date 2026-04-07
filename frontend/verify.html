@@ -1,1 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>CERTVault — Verify Certificate</title>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet"/>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <link rel="stylesheet" href="/style.css"/>
+  <style>
+    .verify-container { max-width: 900px; margin: 0 auto; }
+    .qr-reader-container { width: 100%; max-width: 400px; margin: 0 auto; }
+    .qr-reader { width: 100%; min-height: 300px; border: 2px solid var(--border); border-radius: 20px; overflow: hidden; background: var(--surface2); }
+    .cert-id-input { display: flex; gap: 12px; margin-top: 10px; flex-wrap: wrap; }
+    .cert-id-input input { flex: 1; background: var(--surface2); border: 1px solid var(--border); border-radius: 12px; padding: 14px 18px; color: var(--text); font-family: monospace; }
+    .btn-verify { padding: 14px 28px; background: linear-gradient(135deg, var(--accent), var(--accent2)); border: none; border-radius: 12px; color: #fff; font-family: 'Syne', sans-serif; font-weight: 700; cursor: pointer; }
+    .btn-stop { background: linear-gradient(135deg, #f43f5e, #b91c1c); }
+    .result-card { border-left: 4px solid; transition: all 0.3s; }
+    .result-card.valid { border-left-color: var(--accent3); }
+    .result-card.invalid { border-left-color: var(--danger); }
+    .result-card.revoked { border-left-color: var(--warning); }
+    .detail-row { display: flex; border-bottom: 1px solid var(--border); padding: 12px 0; flex-wrap: wrap; }
+    .detail-label { width: 140px; font-weight: 600; color: var(--muted); }
+    .detail-value { flex: 1; word-break: break-all; }
+    .status-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+    .status-badge.valid { background: rgba(52,211,153,0.15); color: var(--accent3); }
+    .or-divider { display: flex; align-items: center; gap: 15px; color: var(--muted); margin: 20px 0; }
+    .or-divider::before, .or-divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+    .toast-message { position: fixed; bottom: 20px; right: 20px; z-index: 1000; background: var(--surface2); border-left: 4px solid var(--accent3); padding: 12px 20px; border-radius: 12px; font-size: 13px; box-shadow: 0 12px 28px rgba(0,0,0,0.4); }
+    .stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 32px; }
+    @media (max-width: 700px) { .stats-row { grid-template-columns: 1fr; } .cert-id-input { flex-direction: column; } }
+  </style>
+</head>
+<body>
+<div class="mesh"></div>
+<div class="app">
+  <aside class="sidebar">
+    <div class="logo"><div class="logo-icon"><i class="fa-solid fa-vault"></i></div><div class="logo-text">CERT<span>Vault</span></div></div>
+    <nav class="nav">
+      <div class="nav-label">Main</div>
+      <a class="nav-item" href="/"><i class="fa-solid fa-arrow-up-from-bracket"></i> Upload Certificate</a>
+      <a class="nav-item" href="/admin"><i class="fa-solid fa-shield-halved"></i> Admin Panel</a>
+      <a class="nav-item" href="/blockchain"><i class="fa-solid fa-cubes"></i> Blockchain Explorer</a>
+      <a class="nav-item active" href="/verify"><i class="fa-solid fa-qrcode"></i> Verify Certificate</a>
+    </nav>
+    <div class="sidebar-footer"><div class="chain-status"><div class="pulse-dot"></div><div class="chain-status-text"><div class="s-label">Network Status</div><div class="s-val" id="networkStatus">Connected</div></div></div></div>
+  </aside>
 
+  <main class="main">
+    <div class="verify-container">
+      <div class="page-header"><h1><i class="fa-solid fa-qrcode"></i> Verify Certificate</h1><p>Instant blockchain-based verification — Scan QR or enter Certificate ID</p></div>
+      
+      <div class="stats-row">
+        <div class="stat-card c1"><div class="stat-icon"><i class="fa-solid fa-certificate"></i></div><div class="stat-val" id="totalCerts">0</div><div class="stat-label">Total Certificates</div></div>
+        <div class="stat-card c2"><div class="stat-icon"><i class="fa-solid fa-circle-check"></i></div><div class="stat-val" id="verifiedCount">0</div><div class="stat-label">Total Verifications</div></div>
+        <div class="stat-card c3"><div class="stat-icon"><i class="fa-solid fa-cubes"></i></div><div class="stat-val" id="blockHeight">0</div><div class="stat-label">Block Height</div></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title"><i class="fa-solid fa-camera"></i> Scan QR Code</div>
+        <div class="qr-reader-container">
+          <div class="qr-reader" id="qrReader">
+            <div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted);padding:100px;text-align:center;">
+              <i class="fa-solid fa-qrcode fa-3x"></i>
+              <p style="margin-top:10px;">Click "Start Camera" to scan</p>
+            </div>
+          </div>
+        </div>
+        <div style="display: flex; gap: 12px; justify-content: center; margin-top: 20px;">
+          <button class="btn-verify" id="startScannerBtn"><i class="fa-solid fa-video"></i> Start Camera</button>
+          <button class="btn-verify btn-stop" id="stopScannerBtn" style="display:none; background:linear-gradient(135deg,#f43f5e,#b91c1c);"><i class="fa-solid fa-stop"></i> Stop Camera</button>
+        </div>
+        <div class="or-divider"><span>OR</span></div>
+        <div class="cert-id-input">
+          <input type="text" id="certIdInput" placeholder="Enter Certificate ID (e.g., 550e8400-e29b-41d4-a716-446655440000)">
+          <button class="btn-verify" id="verifyBtn"><i class="fa-solid fa-magnifying-glass"></i> Verify Now</button>
+        </div>
+      </div>
+
+      <div id="resultContainer" style="display:none;"><div class="card result-card" id="resultCard"><div id="resultContent"></div></div></div>
+    </div>
+  </main>
+</div>
+
+<script>
+  // ============ CERTVAULT VERIFICATION MODULE ============
+  
+  let html5QrCode = null;
+  let isScanning = false;
+  let totalVerifications = parseInt(localStorage.getItem('certvault_verifications') || '0');
+  let revokedSet = new Set();
+
+  function loadRevoked() {
+    try { 
+      const s = localStorage.getItem('certvault_revoked'); 
+      if (s) revokedSet = new Set(JSON.parse(s)); 
+    } catch(e) { console.error(e); }
+  }
+
+  function escapeHtml(s) { 
+    if (!s) return ''; 
+    return s.replace(/[&<>]/g, m => m==='&'?'&amp;':m==='<'?'&lt;':'&gt;'); 
+  }
+
+  function showToast(msg, type) {
+    const toast = document.createElement('div');
+    toast.className = 'toast-message';
+    toast.style.borderLeftColor = type === 'error' ? '#f87171' : '#34d399';
+    toast.innerHTML = `<i class="fa-solid ${type === 'error' ? 'fa-circle-exclamation' : 'fa-circle-check'}"></i> ${escapeHtml(msg)}`;
+    document.body.appendChild(toast);
+    setTimeout(() => { toast.remove(); }, 3000);
+  }
+
+  async function updateStats() {
+    try {
+      const certRes = await fetch('/api/certificates');
+      let certs = await certRes.json();
+      if (!Array.isArray(certs)) certs = certs.certificates || [];
+      
+      const blockRes = await fetch('/api/blockchain');
+      const blocks = await blockRes.json();
+      let blockHeight = blocks.length || blocks.chain?.length || 0;
+      
+      document.getElementById('totalCerts').innerText = certs.length;
+      document.getElementById('verifiedCount').innerText = totalVerifications;
+      document.getElementById('blockHeight').innerText = blockHeight;
+      document.getElementById('networkStatus').innerHTML = `Connected · Block #${blockHeight}`;
+    } catch(e) { console.error('Stats error:', e); }
+  }
+
+  async function verifyCertificate(certId) {
+    if (!certId || !certId.trim()) {
+      showToast('Please enter a Certificate ID', 'error');
+      return false;
+    }
+    
+    const clean = certId.trim();
+    const resultContainer = document.getElementById('resultContainer');
+    const resultContent = document.getElementById('resultContent');
+    resultContainer.style.display = 'block';
+    resultContent.innerHTML = '<div style="text-align:center;padding:40px;"><div class="spinner"></div><p>Verifying on blockchain...</p></div>';
+    
+    try {
+      const response = await fetch(`/api/verify/${encodeURIComponent(clean)}`);
+      const data = await response.json();
+      
+      if (data.valid) {
+        // Increment verification count
+        totalVerifications++;
+        localStorage.setItem('certvault_verifications', totalVerifications);
+        updateStats();
+        showToast('✅ Certificate Verified Successfully!', 'success');
+        showResult('valid', data.certificate, data.block);
+        return true;
+      } else if (data.revoked) {
+        showResult('revoked', data.certificate, null);
+        return false;
+      } else {
+        showResult('invalid', data.reason || 'Certificate not found', null);
+        return false;
+      }
+    } catch(e) {
+      console.error('Verify error:', e);
+      showResult('invalid', 'Network error: ' + e.message, null);
+      return false;
+    }
+  }
+
+  function showResult(status, cert, block) {
+    const container = document.getElementById('resultContainer');
+    const card = document.getElementById('resultCard');
+    const content = document.getElementById('resultContent');
+    
+    container.style.display = 'block';
+    card.classList.remove('valid', 'invalid', 'revoked');
+    card.classList.add(status);
+    
+    if (status === 'valid' && cert) {
+      content.innerHTML = `
+        <div style="margin-bottom:20px;"><i class="fa-solid fa-circle-check" style="color:var(--accent3);font-size:32px;"></i>
+        <h2 style="display:inline;margin-left:12px;">Certificate Verified ✓</h2>
+        <span class="status-badge valid" style="float:right;"><i class="fa-solid fa-shield-halved"></i> AUTHENTIC</span></div>
+        <div class="detail-row"><div class="detail-label">Certificate ID</div><div class="detail-value"><code>${escapeHtml(cert.certId)}</code></div></div>
+        <div class="detail-row"><div class="detail-label">Student Name</div><div class="detail-value">${escapeHtml(cert.studentName)}</div></div>
+        <div class="detail-row"><div class="detail-label">Course</div><div class="detail-value">${escapeHtml(cert.courseName)}</div></div>
+        <div class="detail-row"><div class="detail-label">Institution</div><div class="detail-value">${escapeHtml(cert.institution)}</div></div>
+        <div class="detail-row"><div class="detail-label">Issue Date</div><div class="detail-value">${cert.issueDate || '—'}</div></div>
+        <div style="margin-top:20px;padding:16px;background:var(--surface2);border-radius:12px;">
+          <div class="proof-title"><i class="fa-solid fa-cube"></i> Blockchain Proof</div>
+          <div class="detail-row"><div class="detail-label">Block Index</div><div class="detail-value">#${cert.blockIndex || block?.index || '—'}</div></div>
+          <div class="detail-row"><div class="detail-label">Block Hash</div><div class="detail-value"><code>${escapeHtml(block?.hash || cert.blockHash || '—')}</code></div></div>
+          <div class="detail-row"><div class="detail-label">Timestamp</div><div class="detail-value">${block?.timestamp ? new Date(block.timestamp).toLocaleString() : '—'}</div></div>
+        </div>`;
+    } else if (status === 'revoked' && cert) {
+      content.innerHTML = `
+        <div><i class="fa-solid fa-ban" style="color:var(--warning);font-size:32px;"></i>
+        <h2 style="display:inline;margin-left:12px;">Certificate Revoked ⚠️</h2>
+        <span class="status-badge revoked" style="float:right;">REVOKED</span></div>
+        <div class="detail-row"><div class="detail-label">Certificate ID</div><div class="detail-value"><code>${escapeHtml(cert.certId)}</code></div></div>
+        <div class="detail-row"><div class="detail-label">Student Name</div><div class="detail-value">${escapeHtml(cert.studentName)}</div></div>
+        <div class="detail-row"><div class="detail-label">Course</div><div class="detail-value">${escapeHtml(cert.courseName)}</div></div>
+        <div class="detail-row"><div class="detail-label">Revoked Reason</div><div class="detail-value" style="color:var(--warning);">${escapeHtml(cert.revokedReason || 'Administrative action')}</div></div>`;
+    } else {
+      const msg = typeof cert === 'string' ? cert : 'Certificate not found or invalid';
+      content.innerHTML = `
+        <div><i class="fa-solid fa-circle-xmark" style="color:var(--danger);font-size:32px;"></i>
+        <h2 style="display:inline;margin-left:12px;">Verification Failed ✗</h2>
+        <span class="status-badge invalid" style="float:right;">INVALID</span></div>
+        <div style="text-align:center;padding:20px;"><p style="color:var(--danger);">${escapeHtml(msg)}</p></div>`;
+    }
+    container.scrollIntoView({ behavior: 'smooth' });
+  }
+
+  // QR Scanner Functions
+  async function startScanner() {
+    if (isScanning) {
+      stopScanner();
+      return;
+    }
+    
+    const readerDiv = document.getElementById('qrReader');
+    readerDiv.innerHTML = '';
+    
+    try {
+      html5QrCode = new Html5Qrcode("qrReader");
+      const config = { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0 };
+      
+      await html5QrCode.start(
+        { facingMode: "environment" },
+        config,
+        (decodedText) => {
+          console.log('QR Scanned:', decodedText);
+          let certId = decodedText;
+          const match = decodedText.match(/\/verify\/([a-f0-9-]+)/i);
+          if (match) certId = match[1];
+          document.getElementById('certIdInput').value = certId;
+          verifyCertificate(certId);
+          stopScanner();
+          showToast('QR Code scanned successfully!', 'success');
+        },
+        (error) => { console.debug('Scanning...'); }
+      );
+      
+      isScanning = true;
+      document.getElementById('startScannerBtn').style.display = 'none';
+      document.getElementById('stopScannerBtn').style.display = 'flex';
+      
+    } catch (err) {
+      console.error('Camera error:', err);
+      readerDiv.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--danger);padding:100px;text-align:center;">
+        <i class="fa-solid fa-camera-slash fa-3x"></i><p style="margin-top:10px;">Camera access denied or not supported</p></div>`;
+      showToast('Unable to access camera. Please check permissions.', 'error');
+    }
+  }
+
+  async function stopScanner() {
+    if (html5QrCode && isScanning) {
+      try { await html5QrCode.stop(); } catch(e) { console.error(e); }
+      html5QrCode = null;
+    }
+    isScanning = false;
+    document.getElementById('startScannerBtn').style.display = 'flex';
+    document.getElementById('stopScannerBtn').style.display = 'none';
+    document.getElementById('qrReader').innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted);padding:100px;text-align:center;">
+      <i class="fa-solid fa-qrcode fa-3x"></i><p style="margin-top:10px;">Click "Start Camera" to scan</p></div>`;
+  }
+
+  // Event Listeners
+  document.getElementById('startScannerBtn').addEventListener('click', startScanner);
+  document.getElementById('stopScannerBtn').addEventListener('click', stopScanner);
+  document.getElementById('verifyBtn').addEventListener('click', () => {
+    const certId = document.getElementById('certIdInput').value.trim();
+    if (certId) verifyCertificate(certId);
+    else showToast('Please enter a Certificate ID', 'error');
+  });
+  document.getElementById('certIdInput').addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') document.getElementById('verifyBtn').click();
+  });
+  
+  // Check URL for certId
+  const path = window.location.pathname.split('/');
+  if (path[1] === 'verify' && path[2] && path[2] !== 'verify.html') {
+    document.getElementById('certIdInput').value = path[2];
+    verifyCertificate(path[2]);
+  }
+  
+  // Initial load
+  loadRevoked();
+  updateStats();
+  setInterval(updateStats, 30000);
+</script>
+</body>
+</html>
