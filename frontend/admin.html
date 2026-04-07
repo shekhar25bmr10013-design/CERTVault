@@ -1,1 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>CERTVault — Admin Panel</title>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet"/>
+  <link rel="stylesheet" href="/style.css"/>
+  <style>
+    .cert-item { background: var(--surface2); border-radius: 12px; padding: 16px; margin-bottom: 12px; border-left: 3px solid var(--accent3); }
+    .cert-item.revoked { opacity: 0.6; border-left-color: var(--danger); }
+    .cert-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+    .cert-name-admin { font-weight: 700; }
+    .cert-badge-status { font-size: 10px; background: rgba(52,211,153,0.2); padding: 3px 8px; border-radius: 40px; color: var(--accent3); }
+    .cert-badge-status.revoked-badge { background: rgba(248,113,113,0.2); color: var(--danger); }
+    .cert-details { font-size: 12px; color: var(--muted); display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 12px; }
+    .cert-actions { display: flex; gap: 10px; margin-top: 8px; }
+    .small-icon-btn { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 13px; padding: 4px 8px; border-radius: 6px; }
+    .small-icon-btn:hover { color: var(--accent3); background: rgba(56,189,248,0.1); }
+    .revoke-btn:hover { color: var(--danger); background: rgba(248,113,113,0.1); }
+    .search-bar { background: var(--surface2); border-radius: 40px; padding: 8px 16px; display: flex; align-items: center; gap: 12px; margin-bottom: 20px; border: 1px solid var(--border); }
+    .search-bar input { background: transparent; border: none; flex: 1; outline: none; color: var(--text); font-size: 13px; }
+    .cert-list { max-height: 500px; overflow-y: auto; }
+    .toast-message { position: fixed; bottom: 30px; right: 30px; z-index: 999; background: var(--surface2); backdrop-filter: blur(8px); border-left: 4px solid var(--accent3); padding: 12px 20px; border-radius: 12px; font-size: 13px; box-shadow: 0 12px 28px rgba(0,0,0,0.4); }
+  </style>
+</head>
+<body>
+<div class="mesh"></div>
+<div class="app">
+  <aside class="sidebar">
+    <div class="logo"><div class="logo-icon"><i class="fa-solid fa-vault"></i></div><div class="logo-text">CERT<span>Vault</span></div></div>
+    <nav class="nav">
+      <div class="nav-label">Main</div>
+      <a class="nav-item" href="/"><i class="fa-solid fa-arrow-up-from-bracket"></i> Upload Certificate</a>
+      <a class="nav-item active" href="/admin"><i class="fa-solid fa-shield-halved"></i> Admin Panel</a>
+      <a class="nav-item" href="/blockchain"><i class="fa-solid fa-cubes"></i> Blockchain Explorer</a>
+      <a class="nav-item" href="/verify"><i class="fa-solid fa-qrcode"></i> Verify Certificate</a>
+    </nav>
+    <div class="sidebar-footer"><div class="chain-status"><div class="pulse-dot"></div><div class="chain-status-text"><div class="s-label">Network Status</div><div class="s-val" id="networkStatus">Connected</div></div></div></div>
+  </aside>
 
+  <main class="main">
+    <div class="page-header"><h1><i class="fa-solid fa-shield-halved"></i> Admin Control Hub</h1><p>Manage certificates, revoke credentials & monitor blockchain integrity</p></div>
+    <div class="stats-row">
+      <div class="stat-card c1"><div class="stat-icon"><i class="fa-solid fa-certificate"></i></div><div class="stat-val" id="adminTotalCerts">0</div><div class="stat-label">Total Issued</div></div>
+      <div class="stat-card c2"><div class="stat-icon"><i class="fa-solid fa-circle-check"></i></div><div class="stat-val" id="adminActiveCerts">0</div><div class="stat-label">Active</div></div>
+      <div class="stat-card c3"><div class="stat-icon"><i class="fa-solid fa-ban"></i></div><div class="stat-val" id="adminRevokedCerts">0</div><div class="stat-label">Revoked</div></div>
+      <div class="stat-card c4"><div class="stat-icon"><i class="fa-solid fa-cubes"></i></div><div class="stat-val" id="adminBlockHeight">0</div><div class="stat-label">Block Height</div></div>
+    </div>
+
+    <div class="admin-grid">
+      <div class="card"><div class="card-title"><i class="fa-solid fa-trash-can"></i> Revoke Certificate</div>
+        <div class="form-group"><label class="form-label">Certificate ID</label><input type="text" class="form-input" id="revokeCertId" placeholder="e.g., 550e8400-e29b-41d4-a716-446655440000"/></div>
+        <div class="form-group"><label class="form-label">Reason (optional)</label><input type="text" class="form-input" id="revokeReason" placeholder="Fraud / Administrative error"/></div>
+        <button class="btn-upload btn-danger" id="revokeBtn" style="background:linear-gradient(135deg,#f43f5e,#b91c1c)"><i class="fa-solid fa-ban"></i> Revoke Credential</button>
+        <div style="margin-top:16px;font-size:12px;color:var(--muted);"><i class="fa-solid fa-shield-halved"></i> Revocation is permanent and recorded on blockchain.</div>
+      </div>
+      <div class="card"><div class="card-title"><i class="fa-solid fa-database"></i> System Integrity</div>
+        <button class="btn-upload btn-outline" id="auditBtn" style="margin-bottom:12px"><i class="fa-solid fa-magnifying-glass"></i> Run Integrity Check</button>
+        <button class="btn-upload btn-outline" id="refreshCacheBtn"><i class="fa-solid fa-rotate"></i> Refresh Data</button>
+        <div id="integrityResult" style="margin-top:12px;font-size:12px;"></div>
+      </div>
+    </div>
+
+    <div class="card"><div class="card-title"><i class="fa-solid fa-list-check"></i> Certificate Registry</div>
+      <div class="search-bar"><i class="fa-solid fa-search"></i><input type="text" id="adminSearchInput" placeholder="Search by student name, cert ID or course..."></div>
+      <div class="cert-list" id="adminCertList"><div style="text-align:center;padding:30px;"><i class="fa-solid fa-spinner fa-pulse"></i> Loading...</div></div>
+    </div>
+  </main>
+</div>
+
+<script>
+  let currentCertificates = [];
+  let revokedSet = new Set();
+
+  function loadRevoked() { try { const s = localStorage.getItem('certvault_revoked'); if(s) revokedSet = new Set(JSON.parse(s)); } catch(e){} }
+  function saveRevoked() { localStorage.setItem('certvault_revoked', JSON.stringify([...revokedSet])); }
+  function escapeHtml(s) { if(!s) return ''; return s.replace(/[&<>]/g, m => m==='&'?'&amp;':m==='<'?'&lt;':'&gt;'); }
+  function showToast(msg, type) { const t=document.createElement('div'); t.className='toast-message'; t.style.borderLeftColor=type==='error'?'var(--danger)':'var(--accent3)'; t.innerHTML=`<i class="fa-solid ${type==='error'?'fa-circle-exclamation':'fa-circle-check'}"></i> ${escapeHtml(msg)}`; document.body.appendChild(t); setTimeout(()=>{t.style.opacity='0'; setTimeout(()=>t.remove(),500);},3000); }
+
+  async function fetchCertificates() {
+    try { const res=await fetch('/api/certificates'); const data=await res.json(); let certs=data.certificates||data||[]; currentCertificates=certs.map(c=>({...c, revoked:revokedSet.has(c.certId)||c.revoked===true})); return currentCertificates; } catch(e){ return []; }
+  }
+  async function fetchBlockchain() { try { const res=await fetch('/api/blockchain'); const data=await res.json(); return { height: data.length || 0 }; } catch(e){ return { height: 0 }; } }
+  async function updateStats() { const certs=await fetchCertificates(); const total=certs.length; const active=certs.filter(c=>!c.revoked).length; const {height}=await fetchBlockchain(); document.getElementById('adminTotalCerts').innerText=total; document.getElementById('adminActiveCerts').innerText=active; document.getElementById('adminRevokedCerts').innerText=total-active; document.getElementById('adminBlockHeight').innerText=height; document.getElementById('networkStatus').innerHTML=`Connected · Block #${height}`; renderList(); }
+
+  function renderList(search='') {
+    const container=document.getElementById('adminCertList');
+    let filtered=currentCertificates;
+    if(search.trim()){ const s=search.trim().toLowerCase(); filtered=currentCertificates.filter(c=> (c.studentName||'').toLowerCase().includes(s)||(c.courseName||'').toLowerCase().includes(s)||(c.certId||'').toLowerCase().includes(s)||(c.institution||'').toLowerCase().includes(s)); }
+    if(!filtered.length){ container.innerHTML='<div style="text-align:center;padding:30px;color:var(--muted);">No certificates found</div>'; return; }
+    container.innerHTML='';
+    filtered.forEach(cert=>{ const div=document.createElement('div'); div.className=`cert-item ${cert.revoked?'revoked':''}`; div.innerHTML=`<div class="cert-header"><span class="cert-name-admin">${escapeHtml(cert.studentName||'Unknown')}</span><span class="cert-badge-status ${cert.revoked?'revoked-badge':''}">${cert.revoked?'REVOKED':'ACTIVE'}</span></div><div class="cert-details"><span><i class="fa-regular fa-id-card"></i> ${escapeHtml(cert.courseName||'—')}</span><span><i class="fa-solid fa-building"></i> ${escapeHtml(cert.institution||'—')}</span></div><div class="cert-actions"><button class="small-icon-btn view-btn" data-id="${escapeHtml(cert.certId)}"><i class="fa-solid fa-eye"></i> View</button>${!cert.revoked?`<button class="small-icon-btn revoke-btn" data-id="${escapeHtml(cert.certId)}" data-name="${escapeHtml(cert.studentName)}"><i class="fa-solid fa-ban"></i> Revoke</button>`:''}</div>`; container.appendChild(div); });
+    document.querySelectorAll('.view-btn').forEach(btn=>btn.addEventListener('click',()=>{ const id=btn.getAttribute('data-id'); if(id) window.open(`/verify/${id}`,'_blank'); }));
+    document.querySelectorAll('.revoke-btn').forEach(btn=>btn.addEventListener('click',async()=>{ const id=btn.getAttribute('data-id'), name=btn.getAttribute('data-name'); if(confirm(`Revoke certificate for ${name}?`)) await revokeCert(id); }));
+  }
+
+  async function revokeCert(certId){
+    const reason=document.getElementById('revokeReason').value;
+    try{ const res=await fetch('/api/revoke',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({certId,reason})}); const data=await res.json();
+      if(data.success){ revokedSet.add(certId); saveRevoked(); showToast(`Certificate revoked successfully`,'success'); document.getElementById('revokeReason').value=''; document.getElementById('revokeCertId').value=''; updateStats(); }
+      else showToast(data.error||'Revocation failed','error');
+    } catch(e){ showToast('Network error','error'); }
+  }
+
+  document.getElementById('revokeBtn')?.addEventListener('click',async()=>{ const id=document.getElementById('revokeCertId').value.trim(); if(!id){ showToast('Enter Certificate ID','error'); return; } await revokeCert(id); });
+  document.getElementById('auditBtn')?.addEventListener('click',async()=>{ const div=document.getElementById('integrityResult'); div.innerHTML='<i class="fa-solid fa-spinner fa-pulse"></i> Checking...'; try{ const res=await fetch('/api/blockchain'); const data=await res.json(); if(data.isValid!==false) div.innerHTML='<i class="fa-solid fa-shield-halved" style="color:var(--accent3);"></i> Blockchain integrity verified.'; else div.innerHTML='<i class="fa-solid fa-triangle-exclamation" style="color:var(--danger);"></i> Inconsistency found!'; } catch(e){ div.innerHTML='Check failed'; } });
+  document.getElementById('refreshCacheBtn')?.addEventListener('click',()=>{ updateStats(); showToast('Data refreshed','success'); });
+  document.getElementById('adminSearchInput')?.addEventListener('input',e=>renderList(e.target.value));
+
+  loadRevoked(); updateStats(); setInterval(updateStats,30000);
+</script>
+</body>
+</html>
