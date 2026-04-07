@@ -1,1 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>CERTVault — Blockchain Explorer</title>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet"/>
+  <link rel="stylesheet" href="/style.css"/>
+  <style>
+    .explorer-grid { display: grid; grid-template-columns: 1fr 380px; gap: 24px; }
+    .blocks-list { display: flex; flex-direction: column; gap: 12px; max-height: 500px; overflow-y: auto; }
+    .block-item { background: var(--surface2); border: 1px solid var(--border); border-radius: 14px; padding: 16px; cursor: pointer; transition: all 0.2s; }
+    .block-item:hover { border-color: var(--accent); }
+    .block-header { display: flex; justify-content: space-between; margin-bottom: 10px; flex-wrap: wrap; }
+    .block-height { font-family: monospace; font-weight: 800; font-size: 16px; color: var(--accent); }
+    .block-hash { font-family: monospace; font-size: 11px; background: var(--surface); padding: 4px 8px; border-radius: 8px; word-break: break-all; }
+    .detail-row { display: flex; border-bottom: 1px solid var(--border); padding: 12px 0; }
+    .detail-label { width: 100px; font-weight: 600; color: var(--muted); }
+    .search-area { display: flex; gap: 12px; margin-bottom: 20px; }
+    .search-input { flex: 1; background: var(--surface2); border: 1px solid var(--border); border-radius: 40px; padding: 10px 18px; color: var(--text); }
+    @media (max-width: 1000px) { .explorer-grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+<div class="mesh"></div>
+<div class="app">
+  <aside class="sidebar">
+    <div class="logo"><div class="logo-icon"><i class="fa-solid fa-vault"></i></div><div class="logo-text">CERT<span>Vault</span></div></div>
+    <nav class="nav">
+      <div class="nav-label">Main</div>
+      <a class="nav-item" href="/"><i class="fa-solid fa-arrow-up-from-bracket"></i> Upload Certificate</a>
+      <a class="nav-item" href="/admin"><i class="fa-solid fa-shield-halved"></i> Admin Panel</a>
+      <a class="nav-item active" href="/blockchain"><i class="fa-solid fa-cubes"></i> Blockchain Explorer</a>
+      <a class="nav-item" href="/verify"><i class="fa-solid fa-qrcode"></i> Verify Certificate</a>
+    </nav>
+    <div class="sidebar-footer"><div class="chain-status"><div class="pulse-dot"></div><div class="chain-status-text"><div class="s-label">Network Status</div><div class="s-val" id="networkStatus">Connected</div></div></div></div>
+  </aside>
 
+  <main class="main">
+    <div class="page-header"><h1><i class="fa-solid fa-cubes"></i> Blockchain Explorer</h1><p>Immutable ledger — inspect certificate blocks, hashes, and on-chain integrity</p></div>
+    <div class="stats-row">
+      <div class="stat-card c1"><div class="stat-icon"><i class="fa-solid fa-certificate"></i></div><div class="stat-val" id="totalCerts">0</div><div class="stat-label">Certificates</div></div>
+      <div class="stat-card c2"><div class="stat-icon"><i class="fa-solid fa-cube"></i></div><div class="stat-val" id="blockCount">0</div><div class="stat-label">Block Height</div></div>
+      <div class="stat-card c3"><div class="stat-icon"><i class="fa-solid fa-fingerprint"></i></div><div class="stat-val" id="uniqueHashes">0</div><div class="stat-label">Unique Hashes</div></div>
+      <div class="stat-card c4"><div class="stat-icon"><i class="fa-solid fa-clock"></i></div><div class="stat-val" id="lastBlock">—</div><div class="stat-label">Last Update</div></div>
+    </div>
+
+    <div class="explorer-grid">
+      <div class="card"><div class="card-title"><i class="fa-solid fa-link"></i> Blockchain Ledger</div>
+        <div class="search-area"><input type="text" id="blockSearch" class="search-input" placeholder="Search by Cert ID / Student name..."><button id="searchBtn" class="btn-outline" style="padding:0 16px;border-radius:40px;"><i class="fa-solid fa-magnifying-glass"></i></button></div>
+        <div id="blocksContainer" class="blocks-list"><div style="text-align:center;padding:20px;"><i class="fa-solid fa-spinner fa-pulse"></i> Loading...</div></div>
+      </div>
+      <div class="card"><div class="card-title"><i class="fa-solid fa-circle-info"></i> Block Inspector</div><div id="detailPanel"><div style="color:var(--muted);text-align:center;padding:30px;"><i class="fa-solid fa-cube fa-2x" style="opacity:0.5"></i><p>Select a block to view details</p></div></div><div id="verificationBadge" style="margin-top:16px;"></div></div>
+    </div>
+  </main>
+</div>
+
+<script>
+  let blockchain=[], certificates=[]; let revokedSet=new Set();
+  function loadRevoked(){ try{ const s=localStorage.getItem('certvault_revoked'); if(s) revokedSet=new Set(JSON.parse(s)); } catch(e){} }
+  function escapeHtml(s){ if(!s) return ''; return s.replace(/[&<>]/g, m=>m==='&'?'&amp;':m==='<'?'&lt;':'&gt;'); }
+  function formatTime(ts){ return ts?new Date(ts).toLocaleString():'N/A'; }
+
+  async function fetchData(){
+    try{
+      const blockRes=await fetch('/api/blockchain'); const blockData=await blockRes.json();
+      blockchain=blockData.chain||[];
+      const certRes=await fetch('/api/certificates'); const certData=await certRes.json();
+      certificates=certData.certificates||certData||[];
+      certificates=certificates.map(c=>({...c, revoked:revokedSet.has(c.certId)||c.revoked===true}));
+      return {blocks:blockchain,certs:certificates};
+    } catch(e){ return {blocks:[],certs:[]}; }
+  }
+
+  async function updateStats(){
+    const {blocks,certs}=await fetchData();
+    document.getElementById('totalCerts').innerText=certs.length;
+    document.getElementById('blockCount').innerText=blocks.length;
+    const unique=new Set(certs.map(c=>c.fileHash).filter(Boolean)).size;
+    document.getElementById('uniqueHashes').innerText=unique;
+    const last=blocks[blocks.length-1]; document.getElementById('lastBlock').innerText=last?formatTime(last.timestamp).slice(0,16):'—';
+    document.getElementById('networkStatus').innerHTML=`Connected · Block #${blocks.length}`;
+    renderBlocks(blocks,certs);
+    if(blocks.length) showBlockDetails(blocks[blocks.length-1],certs);
+  }
+
+  function renderBlocks(blocks,certs,search=''){
+    const container=document.getElementById('blocksContainer');
+    let filtered=blocks;
+    if(search.trim()){
+      const s=search.toLowerCase();
+      filtered=blocks.filter(b=>{
+        if(b.index===0) return false;
+        const matchCert=certs.find(c=>c.blockIndex===b.index||c.certId===b.data?.certId);
+        return String(b.index).includes(s)||(b.hash||'').toLowerCase().includes(s)||(matchCert?.studentName||'').toLowerCase().includes(s)||(matchCert?.courseName||'').toLowerCase().includes(s)||(b.data?.certId||'').toLowerCase().includes(s);
+      });
+    }
+    if(!filtered.length){ container.innerHTML='<div style="text-align:center;padding:30px;">No blocks found</div>'; return; }
+    container.innerHTML='';
+    [...filtered].reverse().forEach(block=>{
+      const matchCert=certs.find(c=>c.blockIndex===block.index||c.certId===block.data?.certId);
+      const div=document.createElement('div'); div.className='block-item';
+      div.innerHTML=`<div class="block-header"><span class="block-height"><i class="fa-solid fa-cube"></i> Block #${block.index}</span><span class="block-timestamp">${formatTime(block.timestamp)}</span></div>
+        <div class="block-hash"><i class="fa-solid fa-fingerprint"></i> ${block.hash?.substring(0,24)}…</div>
+        <div class="block-details" style="margin-top:8px;font-size:12px;color:var(--muted);"><span><i class="fa-regular fa-id-card"></i> ${escapeHtml(matchCert?.studentName||'—')}</span><span><i class="fa-solid fa-graduation-cap"></i> ${escapeHtml(matchCert?.courseName||'—')}</span></div>`;
+      div.onclick=()=>showBlockDetails(block,certs);
+      container.appendChild(div);
+    });
+  }
+
+  function showBlockDetails(block,certs){
+    const matchCert=certs.find(c=>c.blockIndex===block.index||c.certId===block.data?.certId);
+    const isGenesis=block.index===0;
+    const panel=document.getElementById('detailPanel'), badge=document.getElementById('verificationBadge');
+    let certHtml='';
+    if(!isGenesis && matchCert){
+      const isRevoked=matchCert.revoked===true;
+      certHtml=`<div style="margin-top:16px;"><div class="detail-row"><div class="detail-label">Certificate ID</div><div class="detail-value"><code>${escapeHtml(matchCert.certId)}</code></div></div>
+        <div class="detail-row"><div class="detail-label">Student</div><div class="detail-value">${escapeHtml(matchCert.studentName)}</div></div>
+        <div class="detail-row"><div class="detail-label">Course</div><div class="detail-value">${escapeHtml(matchCert.courseName)}</div></div>
+        <div class="detail-row"><div class="detail-label">Institution</div><div class="detail-value">${escapeHtml(matchCert.institution)}</div></div>
+        <div class="detail-row"><div class="detail-label">Issue Date</div><div class="detail-value">${matchCert.issueDate||'—'}</div></div>
+        <div class="detail-row"><div class="detail-label">Status</div><div class="detail-value ${isRevoked?'text-warning':''}">${isRevoked?'REVOKED ⚠️':'ACTIVE ✅'}</div></div></div>`;
+    } else if(!isGenesis){ certHtml='<div style="margin-top:16px;padding:12px;background:rgba(248,113,113,0.1);border-radius:12px;"><i class="fa-solid fa-circle-exclamation"></i> No certificate data associated</div>'; }
+    panel.innerHTML=`<div><h3 style="font-family:Syne;">Block #${block.index}</h3></div>
+      <div class="detail-row"><div class="detail-label">Block Hash</div><div class="detail-value"><code>${escapeHtml(block.hash||'—')}</code></div></div>
+      <div class="detail-row"><div class="detail-label">Previous Hash</div><div class="detail-value"><code>${escapeHtml(block.previousHash||'—')}</code></div></div>
+      <div class="detail-row"><div class="detail-label">Timestamp</div><div class="detail-value">${formatTime(block.timestamp)}</div></div>${certHtml}`;
+    if(matchCert && !isGenesis){
+      const isRevoked=matchCert.revoked===true;
+      badge.innerHTML=`<div style="background:var(--surface2);border-radius:12px;padding:12px;border-left:3px solid ${isRevoked?'var(--warning)':'var(--accent3)'};">${isRevoked?'<span style="color:var(--warning);"><i class="fa-solid fa-ban"></i> REVOKED on blockchain</span>':'<span style="color:var(--accent3);"><i class="fa-solid fa-shield-halved"></i> Blockchain seal: INTACT</span>'}</div>`;
+      if(matchCert.certId) badge.innerHTML+=`<div style="margin-top:12px;"><a href="/verify/${matchCert.certId}" target="_blank" style="color:var(--accent);">Verify Certificate →</a></div>`;
+    } else { badge.innerHTML=''; }
+  }
+
+  document.getElementById('searchBtn')?.addEventListener('click',()=>{ const s=document.getElementById('blockSearch')?.value||''; fetchData().then(({blocks,certs})=>renderBlocks(blocks,certs,s)); });
+  document.getElementById('blockSearch')?.addEventListener('input',e=>{ fetchData().then(({blocks,certs})=>renderBlocks(blocks,certs,e.target.value)); });
+  loadRevoked(); updateStats(); setInterval(updateStats,30000);
+</script>
+</body>
+</html>
