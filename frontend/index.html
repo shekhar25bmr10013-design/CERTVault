@@ -1,1 +1,585 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>CERTVault — Issue Certificate</title>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet"/>
+  <link rel="stylesheet" href="/style.css"/>
+  <style>
+    /* Additional styles for better visibility */
+    .btn-upload {
+      width: 100%;
+      padding: 14px;
+      background: linear-gradient(135deg, #38bdf8, #818cf8);
+      border: none;
+      border-radius: 11px;
+      color: #fff;
+      font-family: 'Syne', sans-serif;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+    .btn-upload:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 32px rgba(56,189,248,0.3);
+    }
+    .btn-upload:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+    .spinner {
+      width: 18px;
+      height: 18px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      display: inline-block;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    .result-success {
+      background: rgba(52,211,153,0.08);
+      border: 1px solid rgba(52,211,153,0.25);
+      border-radius: 10px;
+      padding: 14px 16px;
+      color: #34d399;
+      margin-top: 16px;
+    }
+    .result-error {
+      background: rgba(248,113,113,0.08);
+      border: 1px solid rgba(248,113,113,0.25);
+      border-radius: 10px;
+      padding: 14px 16px;
+      color: #f87171;
+      margin-top: 16px;
+    }
+    .file-drop {
+      border: 2px dashed rgba(99,179,237,0.12);
+      border-radius: 12px;
+      padding: 30px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.25s;
+      margin-bottom: 20px;
+    }
+    .file-drop:hover {
+      border-color: #38bdf8;
+      background: rgba(56,189,248,0.04);
+    }
+    .file-drop.drag-over {
+      border-color: #38bdf8;
+      background: rgba(56,189,248,0.08);
+    }
+  </style>
+</head>
+<body>
+<div class="mesh"></div>
+<div class="app">
 
+  <aside class="sidebar">
+    <div class="logo">
+      <div class="logo-icon"><i class="fa-solid fa-vault"></i></div>
+      <div class="logo-text">CERT<span>Vault</span></div>
+    </div>
+    <nav class="nav">
+      <div class="nav-label">Main</div>
+      <a class="nav-item active" href="/"><i class="fa-solid fa-arrow-up-from-bracket"></i> Upload Certificate</a>
+      <a class="nav-item" href="/admin"><i class="fa-solid fa-shield-halved"></i> Admin Panel</a>
+      <a class="nav-item" href="/blockchain"><i class="fa-solid fa-cubes"></i> Blockchain Explorer</a>
+      <a class="nav-item" href="/verify"><i class="fa-solid fa-qrcode"></i> Verify Certificate</a>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="chain-status">
+        <div class="pulse-dot"></div>
+        <div class="chain-status-text">
+          <div class="s-label">Network Status</div>
+          <div class="s-val" id="networkStatus">Connected · Block #0</div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="page-header">
+      <h1>Upload Certificate</h1>
+      <p>Issue tamper-proof credentials anchored on the blockchain</p>
+    </div>
+
+    <div class="stats-row">
+      <div class="stat-card c1"><div class="stat-icon"><i class="fa-solid fa-certificate"></i></div><div class="stat-val" id="statTotal">0</div><div class="stat-label">Certs Issued</div></div>
+      <div class="stat-card c2"><div class="stat-icon"><i class="fa-solid fa-building-columns"></i></div><div class="stat-val" id="statActive">0</div><div class="stat-label">Active Certificates</div></div>
+      <div class="stat-card c3"><div class="stat-icon"><i class="fa-solid fa-circle-check"></i></div><div class="stat-val" id="statVerifications">0</div><div class="stat-label">Total Verifications</div></div>
+      <div class="stat-card c4"><div class="stat-icon"><i class="fa-solid fa-cubes"></i></div><div class="stat-val" id="statBlockHeight">0</div><div class="stat-label">Block Height</div></div>
+    </div>
+
+    <div class="content-grid">
+      <div class="card">
+        <div class="card-title"><i class="fa-solid fa-file-certificate"></i> Certificate Details</div>
+        
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label"><i class="fa-regular fa-user"></i> Student Name *</label>
+            <input class="form-input" type="text" id="studentName" placeholder="e.g. Riya Sharma"/>
+          </div>
+          <div class="form-group">
+            <label class="form-label"><i class="fa-solid fa-book-open"></i> Course Name *</label>
+            <input class="form-input" type="text" id="courseName" placeholder="e.g. Full Stack Dev"/>
+          </div>
+        </div>
+        
+        <div class="form-group">
+          <label class="form-label"><i class="fa-solid fa-building-columns"></i> Institution *</label>
+          <input class="form-input" type="text" id="institution" placeholder="e.g. IIT Bombay"/>
+        </div>
+        
+        <div class="form-group">
+          <label class="form-label"><i class="fa-solid fa-calendar"></i> Issue Date</label>
+          <input class="form-input" type="date" id="issueDate"/>
+        </div>
+        
+        <div class="form-group">
+          <label class="form-label"><i class="fa-solid fa-star"></i> Grade (Optional)</label>
+          <select class="form-input" id="grade">
+            <option value="">Select Grade</option>
+            <option value="A+">A+ (Outstanding)</option>
+            <option value="A">A (Excellent)</option>
+            <option value="B+">B+ (Very Good)</option>
+            <option value="B">B (Good)</option>
+            <option value="C">C (Satisfactory)</option>
+          </select>
+        </div>
+        
+        <div class="file-drop" id="dropZone">
+          <input type="file" id="certFile" accept=".pdf,.jpg,.png" style="display:none;"/>
+          <div class="file-drop-icon"><i class="fa-solid fa-cloud-arrow-up"></i></div>
+          <p><strong>Click or drag certificate file here</strong></p>
+          <p>PDF, JPG or PNG — max 10 MB</p>
+          <div class="file-name" id="fileName"></div>
+        </div>
+        
+        <button class="btn-upload" id="uploadBtn">
+          <i class="fa-solid fa-link"></i>
+          <span id="btnText">Anchor to Blockchain</span>
+          <div class="spinner" id="spinner" style="display:none;"></div>
+        </button>
+        
+        <div id="result"></div>
+      </div>
+
+      <div class="right-col">
+        <div class="card cert-preview">
+          <div class="card-title" style="font-size:13px;"><i class="fa-solid fa-id-card"></i> Live Preview</div>
+          <div class="cert-badge"><i class="fa-solid fa-shield-halved"></i> BLOCKCHAIN VERIFIED</div>
+          <div class="cert-name" id="previewName">—</div>
+          <div class="cert-course" id="previewCourse">—</div>
+          <hr class="cert-divider"/>
+          <div class="cert-meta">
+            <div class="cert-meta-item"><div class="m-label">Institution</div><div class="m-val" id="previewInstitution">—</div></div>
+            <div class="cert-meta-item"><div class="m-label">Issue Date</div><div class="m-val" id="previewDate">—</div></div>
+          </div>
+          <div class="cert-id-row"><i class="fa-solid fa-fingerprint"></i><span id="previewId">Will appear after issuance</span></div>
+        </div>
+
+        <div class="card">
+          <div class="card-title"><i class="fa-solid fa-shield-halved"></i> Verification Pipeline</div>
+          <div class="verify-stages">
+            <div class="v-stage" id="stage1"><div class="v-icon"><i class="fa-solid fa-file-lines"></i></div><div class="v-text"><div class="v-title">Document Upload</div><div class="v-sub">Awaiting file…</div></div><i class="fa-solid fa-circle-check v-check"></i></div>
+            <div class="v-stage" id="stage2"><div class="v-icon"><i class="fa-solid fa-fingerprint"></i></div><div class="v-text"><div class="v-title">Hash Generation</div><div class="v-sub">SHA-256 fingerprint</div></div><i class="fa-solid fa-circle-check v-check"></i></div>
+            <div class="v-stage" id="stage3"><div class="v-icon"><i class="fa-solid fa-cubes"></i></div><div class="v-text"><div class="v-title">Chain Anchoring</div><div class="v-sub">Broadcasting to nodes</div></div><i class="fa-solid fa-circle-check v-check"></i></div>
+            <div class="v-stage" id="stage4"><div class="v-icon"><i class="fa-solid fa-qrcode"></i></div><div class="v-text"><div class="v-title">QR Code Issued</div><div class="v-sub">Shareable link ready</div></div><i class="fa-solid fa-circle-check v-check"></i></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title"><i class="fa-solid fa-qrcode"></i> QR Certificate</div>
+          <div class="qr-container">
+            <div class="qr-box"><div class="qr-placeholder" id="qrPlaceholder"><i class="fa-solid fa-qrcode"></i><p>QR will appear here</p></div><img id="qrImage" alt="QR Code"/></div>
+            <div class="qr-info"><p>A unique QR code links to the on-chain record. Anyone can scan to verify authenticity instantly.</p><button class="qr-scan-btn" onclick="window.location.href='/verify'"><i class="fa-solid fa-camera"></i> Scan & Verify</button></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="chain-strip"><div class="chain-strip-label">Recent Blocks</div><div class="blocks" id="blocksRow"><div class="block">Loading...</div></div></div>
+    </div>
+  </main>
+</div>
+
+<script>
+  // ============ CERTVAULT UPLOAD MODULE ============
+  
+  let isUploading = false;
+  let revokedCertIds = new Set();
+
+  // Load revoked status
+  function loadRevokedStatus() {
+    try {
+      const stored = localStorage.getItem('certvault_revoked');
+      if (stored) revokedCertIds = new Set(JSON.parse(stored));
+    } catch(e) { console.error('Failed to load revoked', e); }
+  }
+
+  // Helper functions
+  function escapeHtml(str) {
+    if (!str) return '';
+    return str.replace(/[&<>]/g, function(m) {
+      if (m === '&') return '&amp;';
+      if (m === '<') return '&lt;';
+      if (m === '>') return '&gt;';
+      return m;
+    });
+  }
+
+  function showToast(message, type) {
+    const toast = document.createElement('div');
+    toast.className = 'toast-message';
+    toast.style.position = 'fixed';
+    toast.style.bottom = '20px';
+    toast.style.right = '20px';
+    toast.style.zIndex = '1000';
+    toast.style.background = type === 'success' ? 'var(--accent3)' : 'var(--danger)';
+    toast.style.color = '#fff';
+    toast.style.padding = '12px 20px';
+    toast.style.borderRadius = '8px';
+    toast.style.fontSize = '14px';
+    toast.innerHTML = `<i class="fa-solid ${type === 'success' ? 'fa-circle-check' : 'fa-circle-exclamation'}"></i> ${escapeHtml(message)}`;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 3000);
+  }
+
+  // Load statistics from backend
+  async function loadStatistics() {
+    try {
+      const certRes = await fetch('/api/certificates');
+      let certificates = await certRes.json();
+      if (!Array.isArray(certificates)) certificates = certificates.certificates || [];
+      
+      const totalCerts = certificates.length;
+      const activeCerts = certificates.filter(c => !revokedCertIds.has(c.certId) && !c.revoked).length;
+      
+      const blockRes = await fetch('/api/blockchain');
+      const blockData = await blockRes.json();
+      let blockHeight = 0;
+      if (blockData.chain && Array.isArray(blockData.chain)) blockHeight = blockData.chain.length;
+      else if (Array.isArray(blockData)) blockHeight = blockData.length;
+      else if (blockData.length) blockHeight = blockData.length;
+      
+      document.getElementById('statTotal').textContent = totalCerts;
+      document.getElementById('statActive').textContent = activeCerts;
+      document.getElementById('statBlockHeight').textContent = blockHeight;
+      document.getElementById('networkStatus').innerHTML = `Connected · Block #${blockHeight}`;
+    } catch (error) {
+      console.error('Stats error:', error);
+    }
+  }
+
+  // Load recent blocks
+  async function loadRecentBlocks() {
+    try {
+      const response = await fetch('/api/certificates');
+      let certificates = await response.json();
+      if (!Array.isArray(certificates)) certificates = certificates.certificates || [];
+      
+      const blocksRow = document.getElementById('blocksRow');
+      if (certificates.length > 0) {
+        const recentCerts = certificates.slice(-6).reverse();
+        blocksRow.innerHTML = '';
+        recentCerts.forEach((cert, index) => {
+          if (index > 0) {
+            const arrow = document.createElement('div');
+            arrow.className = 'block-arrow';
+            arrow.textContent = '›';
+            blocksRow.appendChild(arrow);
+          }
+          const block = document.createElement('div');
+          block.className = 'block';
+          if (index === recentCerts.length - 1) block.classList.add('latest');
+          block.textContent = cert.certId ? `#${cert.certId.slice(-8)}` : '#unknown';
+          block.title = cert.certId || 'Unknown';
+          block.onclick = () => {
+            if (cert.certId) window.location.href = `/verify/${cert.certId}`;
+          };
+          blocksRow.appendChild(block);
+        });
+      } else {
+        blocksRow.innerHTML = '<div class="block">No certificates yet</div>';
+      }
+    } catch (error) {
+      console.error('Blocks error:', error);
+    }
+  }
+
+  // Update live preview
+  function updatePreview() {
+    const name = document.getElementById('studentName')?.value || '';
+    const course = document.getElementById('courseName')?.value || '';
+    const inst = document.getElementById('institution')?.value || '';
+    const date = document.getElementById('issueDate')?.value || '';
+    
+    document.getElementById('previewName').textContent = name || '—';
+    document.getElementById('previewCourse').textContent = course || '—';
+    document.getElementById('previewInstitution').textContent = inst || '—';
+    if (date) {
+      document.getElementById('previewDate').textContent = new Date(date).toLocaleDateString('en-IN', {day:'2-digit',month:'short',year:'numeric'});
+    } else {
+      document.getElementById('previewDate').textContent = '—';
+    }
+  }
+
+  // Set verification stage
+  function setStage(n) {
+    for (let i = 1; i <= 4; i++) {
+      const el = document.getElementById('stage' + i);
+      if (el) {
+        el.classList.remove('done', 'active');
+        if (i < n) el.classList.add('done');
+        else if (i === n) el.classList.add('active');
+      }
+    }
+  }
+
+  function allDone() {
+    for (let i = 1; i <= 4; i++) {
+      const el = document.getElementById('stage' + i);
+      if (el) {
+        el.classList.remove('active');
+        el.classList.add('done');
+      }
+    }
+  }
+
+  function resetStages() {
+    for (let i = 1; i <= 4; i++) {
+      const el = document.getElementById('stage' + i);
+      if (el) el.classList.remove('done', 'active');
+    }
+    setStage(1);
+  }
+
+  function showResult(type, html) {
+    const r = document.getElementById('result');
+    if (r) {
+      r.innerHTML = `<div class="result-${type}">${html}</div>`;
+      setTimeout(() => {
+        if (r.innerHTML) r.innerHTML = '';
+      }, 8000);
+    }
+  }
+
+  // File upload handling
+  const dropZone = document.getElementById('dropZone');
+  const fileInput = document.getElementById('certFile');
+  const fileNameSpan = document.getElementById('fileName');
+  
+  if (dropZone) {
+    dropZone.addEventListener('click', () => {
+      if (fileInput) fileInput.click();
+    });
+    
+    dropZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropZone.classList.add('drag-over');
+    });
+    
+    dropZone.addEventListener('dragleave', () => {
+      dropZone.classList.remove('drag-over');
+    });
+    
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropZone.classList.remove('drag-over');
+      const files = e.dataTransfer.files;
+      if (files && files[0]) {
+        if (fileInput) fileInput.files = files;
+        if (fileNameSpan) fileNameSpan.textContent = '📎 ' + files[0].name;
+        setStage(1);
+      }
+    });
+  }
+  
+  if (fileInput) {
+    fileInput.addEventListener('change', (e) => {
+      if (e.target.files && e.target.files[0]) {
+        if (fileNameSpan) fileNameSpan.textContent = '📎 ' + e.target.files[0].name;
+        setStage(1);
+      }
+    });
+  }
+
+  // Main upload function
+  async function uploadCertificate() {
+    if (isUploading) {
+      showResult('error', 'Upload already in progress. Please wait.');
+      return;
+    }
+    
+    const name = document.getElementById('studentName')?.value.trim();
+    const course = document.getElementById('courseName')?.value.trim();
+    const institution = document.getElementById('institution')?.value.trim();
+    const issueDate = document.getElementById('issueDate')?.value;
+    const grade = document.getElementById('grade')?.value;
+    const file = document.getElementById('certFile')?.files[0];
+    
+    if (!name || !course || !institution) {
+      showResult('error', 'Please fill all required fields (Student Name, Course, Institution)');
+      return;
+    }
+    
+    if (!file) {
+      showResult('error', 'Please select a certificate file');
+      return;
+    }
+    
+    if (file.size > 10 * 1024 * 1024) {
+      showResult('error', 'File too large. Maximum size is 10MB.');
+      return;
+    }
+    
+    isUploading = true;
+    const btn = document.getElementById('uploadBtn');
+    const spinner = document.getElementById('spinner');
+    const btnText = document.getElementById('btnText');
+    
+    if (btn) btn.disabled = true;
+    if (spinner) spinner.style.display = 'inline-block';
+    if (btnText) btnText.textContent = 'Anchoring...';
+    
+    setStage(2);
+    await new Promise(r => setTimeout(r, 500));
+    setStage(3);
+    
+    const formData = new FormData();
+    formData.append('certificate', file);
+    formData.append('studentName', name);
+    formData.append('courseName', course);
+    formData.append('institution', institution);
+    if (issueDate) formData.append('issueDate', issueDate);
+    if (grade) formData.append('grade', grade);
+    
+    try {
+      console.log('Sending to /api/upload...');
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData
+      });
+      
+      const data = await response.json();
+      console.log('Response:', data);
+      
+      if (data.success) {
+        setStage(4);
+        await new Promise(r => setTimeout(r, 500));
+        allDone();
+        
+        const previewId = document.getElementById('previewId');
+        if (previewId) previewId.textContent = data.certId;
+        
+        // Display QR code
+        if (data.qrCode) {
+          const qrImg = document.getElementById('qrImage');
+          const qrPlaceholder = document.getElementById('qrPlaceholder');
+          if (qrImg) {
+            qrImg.src = data.qrCode;
+            qrImg.style.display = 'block';
+          }
+          if (qrPlaceholder) qrPlaceholder.style.display = 'none';
+        }
+        
+        showResult('success', 
+          `<i class="fa-solid fa-circle-check"></i> &nbsp;✅ Certificate anchored to CERTVault successfully!<br>
+           <span style="font-size:12px;">Cert ID: <b>${escapeHtml(data.certId)}</b><br>
+           File Hash: <code style="font-size:10px;">${data.fileHash ? data.fileHash.substring(0, 16) : 'N/A'}...</code><br>
+           Block #${data.blockIndex || '?'}<br>
+           <a href="${data.verifyUrl}" target="_blank" style="color:var(--accent3);">🔗 Verify Certificate</a></span>`);
+        
+        showToast('Certificate anchored successfully!', 'success');
+        
+        // Reset form
+        const studentNameInput = document.getElementById('studentName');
+        const courseNameInput = document.getElementById('courseName');
+        const institutionInput = document.getElementById('institution');
+        const certFileInput = document.getElementById('certFile');
+        
+        if (studentNameInput) studentNameInput.value = '';
+        if (courseNameInput) courseNameInput.value = '';
+        if (institutionInput) institutionInput.value = '';
+        if (certFileInput) certFileInput.value = '';
+        if (fileNameSpan) fileNameSpan.textContent = '';
+        
+        document.getElementById('previewName').textContent = '—';
+        document.getElementById('previewCourse').textContent = '—';
+        document.getElementById('previewInstitution').textContent = '—';
+        document.getElementById('issueDate').value = new Date().toISOString().split('T')[0];
+        if (document.getElementById('grade')) document.getElementById('grade').value = '';
+        
+        // Refresh stats and blocks
+        await loadStatistics();
+        await loadRecentBlocks();
+        
+        // Reset stages after 3 seconds
+        setTimeout(() => {
+          resetStages();
+        }, 3000);
+        
+      } else {
+        showResult('error', '<i class="fa-solid fa-triangle-exclamation"></i> ' + (data.error || 'Upload failed'));
+        resetStages();
+        showToast(data.error || 'Upload failed', 'error');
+      }
+    } catch (error) {
+      console.error('Upload error:', error);
+      showResult('error', '<i class="fa-solid fa-triangle-exclamation"></i> Network error: ' + error.message);
+      resetStages();
+      showToast('Network error: ' + error.message, 'error');
+    } finally {
+      isUploading = false;
+      if (btn) btn.disabled = false;
+      if (spinner) spinner.style.display = 'none';
+      if (btnText) btnText.textContent = 'Anchor to Blockchain';
+    }
+  }
+
+  // Set default date
+  const issueDateInput = document.getElementById('issueDate');
+  if (issueDateInput) {
+    issueDateInput.value = new Date().toISOString().split('T')[0];
+  }
+  
+  // Add event listeners for live preview
+  const studentNameInput = document.getElementById('studentName');
+  const courseNameInput = document.getElementById('courseName');
+  const institutionInput = document.getElementById('institution');
+  const issueDateElem = document.getElementById('issueDate');
+  
+  if (studentNameInput) studentNameInput.addEventListener('input', updatePreview);
+  if (courseNameInput) courseNameInput.addEventListener('input', updatePreview);
+  if (institutionInput) institutionInput.addEventListener('input', updatePreview);
+  if (issueDateElem) issueDateElem.addEventListener('input', updatePreview);
+  
+  // Attach upload button event
+  const uploadBtn = document.getElementById('uploadBtn');
+  if (uploadBtn) {
+    uploadBtn.addEventListener('click', uploadCertificate);
+  }
+  
+  // Load initial data
+  loadRevokedStatus();
+  loadStatistics();
+  loadRecentBlocks();
+  
+  // Refresh every 30 seconds
+  setInterval(() => {
+    loadStatistics();
+    loadRecentBlocks();
+  }, 30000);
+</script>
+</body>
+</html>
